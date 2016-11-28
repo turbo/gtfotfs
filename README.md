@@ -34,7 +34,7 @@ In general, aim to make the resulting repository as clean as possible. Only code
 
 ### Step 4: Creating a New Remote
 
-Set up an empty git repository somewhere any copy the remote origin path. gtfotfs assumes the machine which it is running on has push access to that remote. If not, the script will fail in the final stage, but a local copy of the result repo remains for you to debug.
+Set up an empty git repository somewhere and copy the remote origin path. gtfotfs assumes the machine which it is running on has push access to that remote. If not, the script will fail in the final stage, but a local copy of the result repo remains for you to debug.
 
 ### Step 5: Prepare Name Mapping
 
