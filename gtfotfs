@@ -8,6 +8,7 @@ declare -r YELLOW='\033[0;33m'
 declare -r GT_WORKSPACE="tmigrate"
 declare -r GT_HISTORY="/tmp/$GT_WORKSPACE-history.xml"
 declare -r GT_JQHISTORY="$GT_HISTORY.json"
+declare -r GT_VERSION="v1.0.0"
 
 declare -ri GT_KEEPDIR=0
 
@@ -43,7 +44,7 @@ function gtfotfs::error() {
 function gtfotfs::usage() {
   cat <<EOF
 
-TFVC to Git Migration Tool (${0})"
+TFVC to Git Migration Tool (${0}) ${GT_VERSION}
 by turbo (minxomat@gmail.com | github.com/turbo)
 
 Usage: ${0} <args>
@@ -68,8 +69,10 @@ Arguments:
 
   -n, --names          JSON file which maps between old TFS account names
                        to proper git author strings. E.g.:
-                       {\"CONTOSO\\\\j.doe\": \"John Doe <john.doe@contoso.com>\"}
-                       (one mapping object per line).
+                       {
+                         "CONTOSO\\\\j.doe": "John Doe <john.doe@contoso.com>",
+                         ...
+                       }
 
   -r, --remote         Path to new remote origin. Will be set up and pushed
                        to during the migration.
