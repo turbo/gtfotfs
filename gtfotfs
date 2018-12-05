@@ -8,7 +8,7 @@ declare -r YELLOW='\033[0;33m'
 declare -r GT_WORKSPACE="tmigrate"
 declare -r GT_HISTORY="/tmp/$GT_WORKSPACE-history.xml"
 declare -r GT_JQHISTORY="$GT_HISTORY.json"
-declare -r GT_VERSION="v1.0.2"
+declare -r GT_VERSION="v1.0.3"
 
 declare -ri GT_KEEPDIR=0
 
@@ -307,7 +307,7 @@ function main() {
     exit 0
   fi
 
-  gtfotfs::check_dependencies tf jq xml2json git
+  gtfotfs::check_dependencies tf jq xml2json git java
 
   # Parse arguments
   while [[ "$#" -gt 0 ]]; do case $1 in
