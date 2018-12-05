@@ -20,6 +20,8 @@ gtfotfs is a Bash 4 script and needs
   - Install via `pip`.
 - `git`
 
+Then go to the [releases](https://github.com/turbo/gtfotfs/releases) page to download the current stable version.
+
 
 ### Step 2: Preparing the TFVC Repository
 

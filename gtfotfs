@@ -8,7 +8,7 @@ declare -r YELLOW='\033[0;33m'
 declare -r GT_WORKSPACE="tmigrate"
 declare -r GT_HISTORY="/tmp/$GT_WORKSPACE-history.xml"
 declare -r GT_JQHISTORY="$GT_HISTORY.json"
-declare -r GT_VERSION="v1.0.1"
+declare -r GT_VERSION="v1.0.2"
 
 declare -ri GT_KEEPDIR=0
 
