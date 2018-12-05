@@ -8,7 +8,7 @@ declare -r YELLOW='\033[0;33m'
 declare -r GT_WORKSPACE="tmigrate"
 declare -r GT_HISTORY="/tmp/$GT_WORKSPACE-history.xml"
 declare -r GT_JQHISTORY="$GT_HISTORY.json"
-declare -r GT_VERSION="v1.0.3"
+declare -r GT_VERSION="v1.0.4"
 
 declare -ri GT_KEEPDIR=0
 
@@ -84,6 +84,8 @@ EOF
 }
 
 function gtfotfs::cleanup() {
+  unset GIT_COMMITTER_DATE
+  unset GIT_AUTHOR_DATE
   gtfotfs::cstatus "Done."
 }
 
@@ -264,8 +266,8 @@ function gtfotfs::migrate() {
       fi
     fi
 
-    GIT_AUTHOR_DATE="${GT_CURCSDATE}"
-    GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
+    export GIT_AUTHOR_DATE="${GT_CURCSDATE}"
+    export GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
 
     if ! git add . ; then
       popd || gtfotfs::cd_error
