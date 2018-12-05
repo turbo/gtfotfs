@@ -17,8 +17,9 @@ gtfotfs is a Bash 4 script and needs
 - `jq` (JSON query tool)
   - Install via your package manager, e.g. `apt install jq`.
 - `xml2json`
-  - Install via `pip`.
+  - Install via `pip install https://github.com/hay/xml2json/zipball/master`.
 - `git`
+  - Use a recent version from the Git PPA!
 
 Then go to the [releases](https://github.com/turbo/gtfotfs/releases) page to download the current stable version.
 
