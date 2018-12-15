@@ -10,7 +10,7 @@ declare -r GT_HISTORY="/tmp/$GT_WORKSPACE-history.xml"
 declare -r GT_JQHISTORY="$GT_HISTORY.json"
 declare -r GT_VERSION="v1.0.4"
 
-declare -ri GT_KEEPDIR=0
+declare -i GT_KEEPDIR=0
 
 declare -A GT_OWNERMAP
 
