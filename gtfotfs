@@ -334,9 +334,9 @@ function main() {
     gtfotfs::prepare_target_exisiting
   else
     gtfotfs::prepare_target_new
+    gtfotfs::stage_ignore_file
   fi
 
-  gtfotfs::stage_ignore_file
   gtfotfs::create_temp_workspace
   gtfotfs::get_tfs_history
   gtfotfs::convert_history
