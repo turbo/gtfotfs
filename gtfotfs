@@ -317,7 +317,7 @@ function main() {
     -s|--source)      GT_REPO="$2"            ;shift;shift;;
     -h|--history)     GT_FIRSTCS="C$2~T"      ;shift;shift;;
     -t|--target)      GT_TARGETDIR="$2"       ;shift;shift;;
-    -k|--keep)        GT_KEEPDIR=1                  ;shift;;
+    -k|--keep)        GT_KEEPDIR=1            ;shift;shift;;
     -n|--names)       GT_NAMEFILE="$2"        ;shift;shift;;
     -r|--remote)      GT_GITREMOTE="$2"       ;shift;shift;;
     -i|--ignore)      GT_IGNOREFILE="$2"      ;shift;shift;;
