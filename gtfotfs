@@ -315,8 +315,10 @@ function prepare_keeping_existing_target() {
     then
 
         # Then get the content from the first regex matching capture group
-        continue_from_changeset=$("${BASH_REMATCH[1]}"+1)
-        print_status_update "Found latest changeset ${BASH_REMATCH[0]} already committed. Continuing from changeset $continue_from_changeset"
+        last_commit_changeset=$(("${BASH_REMATCH[1]}"))
+        continue_from_changeset=$($last_commit_changeset+1)
+
+        print_status_update "Found latest changeset $last_commit_changeset already committed. Continuing from changeset $continue_from_changeset"
 
     fi
 
@@ -636,6 +638,7 @@ function migrate_tfs_changesets_to_git_commits() {
         print_status_update "Committing changeset ${current_changeset_id} to git repo"
 
         # Commit files
+        # nothing to commit, working tree clean # Also an error that need to consider
         if ! git commit \
             --all \
             --author="${author_mapping_array["${current_changeset_author}"]}" \
