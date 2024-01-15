@@ -231,7 +231,7 @@ function create_new_target_repo() {
     pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
 
     # Initialize the new git repository
-    if ! git init
+    if ! git init 1> /dev/null
     then
         popd 1> /dev/null || pushd_popd_cd_error
         print_error_and_exit "Could not initialize the git repository in ${git_target_directory}"
