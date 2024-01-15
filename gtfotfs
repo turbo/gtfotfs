@@ -25,7 +25,7 @@ declare     tfs_history_start_changeset="T"
 
 declare     git_remote
 declare     git_ignore_file
-declare     keep_existing_target_repo # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
+declare     keep_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
 declare     author_name_mapping_file
 declare -A  author_mapping_array
 declare     tfs_source_repo_path
