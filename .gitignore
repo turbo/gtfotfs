@@ -1,4 +1,4 @@
 .repos/
-*.json
+*history*.json
 *.xml
 *.txt
