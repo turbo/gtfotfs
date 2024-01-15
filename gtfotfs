@@ -418,9 +418,6 @@ function migrate() {
 
     first_commit=true
 
-    # cd to the target directory to run commands from there
-    pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
-
     # Iterate through $tfs_changeset_sequence
     while read -r current_changeset_id
     do
@@ -432,6 +429,7 @@ function migrate() {
         current_changeset_date=$(   echo "${current_changeset_info}" | jq -r '.[2]')
 
         # Validate (again) that the author is mapped
+        # If the above jq commands fail, then this line will likely fail with a "bad array subscript" error
         if [ -z "${author_mapping_array["${current_changeset_author}"]}" ]
         then
             print_error_and_exit "Source author ${current_changeset_author} is not mapped"
@@ -443,6 +441,10 @@ function migrate() {
         echo "Date:    ${current_changeset_date}"
         echo "Message: ${current_changeset_message}"
         echo ""
+
+        # cd to the target directory to run commands from there
+        # Have to cd in and out of the directory, so that jq can read $tfs_repo_history_file_json each iteration, without having $tfs_repo_history_file_json in the repo
+        pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
 
         # Print the new working directory to show where this command is getting run from
         # print_status_update "Running tf get from $(pwd)"
@@ -503,9 +505,10 @@ function migrate() {
 
         echo ""
 
-    done <<<"${tfs_changeset_sequence}"
+        # cd back out of the repo, so jq can read $tfs_repo_history_file_json on the next iteration
+        popd 1> /dev/null || pushd_popd_cd_error
 
-    popd 1> /dev/null || pushd_popd_cd_error
+    done <<<"${tfs_changeset_sequence}"
 
 }
 
