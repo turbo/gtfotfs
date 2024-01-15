@@ -41,6 +41,11 @@ declare -r  reset_colour='\033[0m'
 # export GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
 
 # External binaries used
+# git
+# java
+# jq
+# tf # Microsoft's Teams Explorer Everywhere Command Line Client (TEE-CLC): https://github.com/microsoft/team-explorer-everywhere
+# xml2json
 
 # Bash built-ins used
 # hash
@@ -54,6 +59,49 @@ declare -r  reset_colour='\033[0m'
 # popd
     # With no arguments, removes the top directory from the stack, and changes to the new top directory.
     # Exit Status: Returns success unless an invalid argument is supplied or the directory change fails.
+
+function unset_shell_environment_variables() {
+
+    unset GIT_COMMITTER_DATE
+    unset GIT_AUTHOR_DATE
+    print_status_update "Unset GIT_COMMITTER_DATE and GIT_AUTHOR_DATE environment variables"
+
+}
+
+
+function print_status_update() {
+
+    # TODO: Add logging to a file
+
+    echo -e "${info_yellow_colour}$(date +'%F %T'); $script_name $script_version; INFO;${reset_colour} $1"
+
+}
+
+
+function print_error_and_exit() {
+
+    # TODO: Add logging to a file
+
+    # If a message was passed to this function call
+    if [ -n "$1" ]
+    then
+
+        # Then print the message
+        echo -e "${error_red_colour}$(date +'%F %T'); $script_name $script_version; ERROR;${reset_colour} $1"
+
+    fi
+
+    # Exit the script, all errors are fatal
+    unset_shell_environment_variables
+    exit 1
+}
+
+
+function pushd_popd_cd_error() {
+
+    print_error_and_exit "pushd, popd, or cd failed; something's very wrong"
+
+}
 
 
 function print_usage_instructions() {
@@ -101,6 +149,73 @@ EOF
 }
 
 
+function parse_and_validate_user_args() {
+
+    # If the user didn't provide any args, print usage instructions then exit
+    if [[ $# -eq 0 ]]
+    then
+        print_usage_instructions
+        exit 0
+    fi
+
+    # Parse user arguments
+    while [[ "$#" -gt 0 ]]
+    do
+        case $1 in
+            -c | --collection)
+                tfs_collection="$2"
+                shift
+                shift
+                ;;
+            -s | --source)
+                tfs_source_repo_path="$2"
+                shift
+                shift
+                ;;
+            -h | --history)
+                tfs_history_start_changeset="C$2~T"
+                shift
+                shift
+                ;;
+            -t | --target)
+                git_target_directory="$2"
+                shift
+                shift
+                ;;
+            -k | --keep)
+                keep_existing_target_repo=true
+                shift
+                shift
+                ;;
+            -n | --names)
+                author_name_mapping_file="$2"
+                shift
+                shift
+                ;;
+            -r | --remote)
+                git_remote="$2"
+                shift
+                shift
+                ;;
+            -i | --ignore)
+                git_ignore_file="$2"
+                shift
+                shift
+                ;;
+            *)
+                print_error_and_exit "Unknown parameter: $1"
+                ;;
+        esac done
+
+    # Validate required arguments
+    if [ -z "$author_name_mapping_file" ];  then print_error_and_exit "Author name mapping file (-n) is required"   ; fi
+    if [ -z "$git_target_directory" ];      then print_error_and_exit "Git target directory (-t) is required"       ; fi
+    if [ -z "$tfs_collection" ];            then print_error_and_exit "Collection (-c) is required"                 ; fi
+    if [ -z "$tfs_source_repo_path" ];      then print_error_and_exit "TFS source repository path (-s) is required" ; fi
+
+}
+
+
 function check_dependencies() {
 
     # TODO: Refactor to test all dependencies, add the missing dependencies to an array, and if the array is not empty, then print the error including all missing dependencies, and exit
@@ -115,60 +230,6 @@ function check_dependencies() {
         hash "${dependency}" 2>&- || print_error_and_exit "Required program \"${dependency}\" not installed or in PATH"
 
     done
-
-}
-
-
-function print_status_update() {
-
-    # TODO: Add logging to a file
-
-    echo -e "${info_yellow_colour}$(date +'%F %T'); $script_name $script_version; INFO;${reset_colour} $1"
-
-}
-
-
-function print_error_and_exit() {
-
-    # TODO: Add logging to a file
-
-    # If a message was passed to this function call
-    if [ -n "$1" ]
-    then
-
-        # Then print the message
-        echo -e "${error_red_colour}$(date +'%F %T'); $script_name $script_version; ERROR;${reset_colour} $1"
-
-    fi
-
-    # Exit the script, all errors are fatal
-    exit 1
-}
-
-
-function pushd_popd_cd_error() {
-
-    print_error_and_exit "pushd, popd, or cd failed; something's very wrong"
-
-}
-
-
-function unset_shell_environment_variables() {
-
-    # TODO: Evaluate if shell environment variables are needed, instead of using script variables
-    unset GIT_COMMITTER_DATE
-    unset GIT_AUTHOR_DATE
-    print_status_update "Unset GIT_COMMITTER_DATE and GIT_AUTHOR_DATE environment variables"
-
-}
-
-
-function configure_git() {
-
-    # Configure Git, to avoid issues and noise
-    git config --global init.defaultBranch "main"
-    git config --global user.name "TFS to Git Migrator"
-    git config --global user.email "tfs@example.com"
 
 }
 
@@ -191,7 +252,7 @@ function prepare_keeping_existing_target() {
     if [ -n "${git_remote}" ]
     then
 
-        print_status_update "git remote provided in script args, overwriting git remote origin in existing repo"
+        print_status_update "Git remote provided in script args, overwriting git remote origin in existing repo"
 
         # cd to the target directory, saving the current pwd to the stack
         pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
@@ -213,6 +274,16 @@ function prepare_keeping_existing_target() {
         popd 1> /dev/null || pushd_popd_cd_error
 
     fi
+
+}
+
+
+function configure_git() {
+
+    # Configure Git, to avoid issues and noise
+    git config --global init.defaultBranch "main"
+    git config --global user.name "TFS to Git Migrator"
+    git config --global user.email "tfs@example.com"
 
 }
 
@@ -414,7 +485,7 @@ function map_authors() {
 }
 
 
-function migrate() {
+function migrate_tfs_changesets_to_git_commits() {
 
     first_commit=true
 
@@ -513,7 +584,7 @@ function migrate() {
 }
 
 
-function git_reflog_gc_and_push_to_origin() {
+function git_garbage_collection() {
 
     pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
 
@@ -522,7 +593,16 @@ function git_reflog_gc_and_push_to_origin() {
     git reflog expire --all --expire=now
     git gc --prune=now --aggressive
 
-    print_status_update "Pushing to origin now"
+    popd 1> /dev/null || pushd_popd_cd_error
+
+}
+
+
+function git_push() {
+
+    pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
+
+    print_status_update "Force pushing to remote origin now"
 
     if ! git push -u origin --all --force
     then
@@ -534,95 +614,38 @@ function git_reflog_gc_and_push_to_origin() {
 
 }
 
+
 function main() {
 
-    # If the user didn't provide any args, print usage instructions then exit
-    if [[ $# -eq 0 ]]
-    then
-        print_usage_instructions
-        exit 0
-    fi
+    parse_and_validate_user_args $#
 
     # Check that all needed dependencies are installed and in $PATH
     check_dependencies git java jq tf xml2json
 
-    # Parse user arguments
-    while [[ "$#" -gt 0 ]]
-    do
-        case $1 in
-        -c | --collection)
-            tfs_collection="$2"
-            shift
-            shift
-            ;;
-        -s | --source)
-            tfs_source_repo_path="$2"
-            shift
-            shift
-            ;;
-        -h | --history)
-            tfs_history_start_changeset="C$2~T"
-            shift
-            shift
-            ;;
-        -t | --target)
-            git_target_directory="$2"
-            shift
-            shift
-            ;;
-        -k | --keep)
-            keep_existing_target_repo=true
-            shift
-            shift
-            ;;
-        -n | --names)
-            author_name_mapping_file="$2"
-            shift
-            shift
-            ;;
-        -r | --remote)
-            git_remote="$2"
-            shift
-            shift
-            ;;
-        -i | --ignore)
-            git_ignore_file="$2"
-            shift
-            shift
-            ;;
-        *)
-            print_error_and_exit "Unknown parameter: $1"
-            ;;
-        esac done
-
-    # Validate arguments
-    if [ -z "$tfs_collection" ];         then print_error_and_exit "Collection (-c) is required"                 ; fi
-    if [ -z "$author_name_mapping_file" ];           then print_error_and_exit "Owner map (-n) is required"                  ; fi
-    if [ -z "$git_target_directory" ];  then print_error_and_exit "Git target directory (-t) is required"       ; fi
-    if [ -z "$tfs_source_repo_path" ];  then print_error_and_exit "TFS source repository path (-s) is required" ; fi
-
-    configure_git
-
-    # If the user set -k flag to keep the existing destination repo
+    # If the user set the -k flag to keep the existing destination repo
     if $keep_existing_target_repo
     then
         prepare_keeping_existing_target
     else
+        configure_git
         create_new_target_repo
         create_and_stage_git_ignore_file
     fi
 
-    # Run the script
+    # Run the migration process
     create_migration_tfs_workspace
     get_tfs_repo_history
     convert_tfs_repo_history_file_from_xml_to_json
     load_tfs_changeset_sequence_old_to_new
     map_authors
-    migrate
-    git_reflog_gc_and_push_to_origin
+    migrate_tfs_changesets_to_git_commits
+    git_garbage_collection
+    git_push
 
+    # Cleanup
     unset_shell_environment_variables
     exit 0
+
 }
 
 # Trap if user hits CTRL-C during script
