@@ -60,8 +60,12 @@ declare -r  reset_colour='\033[0m'
     # Exit Status: Returns success unless an invalid argument is supplied or the directory change fails.
 
 
-function unset_shell_environment_variables() {
+function cleanup() {
 
+    # Clear the pushd / popd directory stack
+    dirs -c
+
+    # Unset environment variables
     unset GIT_COMMITTER_DATE
     unset GIT_AUTHOR_DATE
 
@@ -91,7 +95,7 @@ function print_error_and_exit() {
     fi
 
     # Exit the script, all errors are fatal
-    unset_shell_environment_variables
+    cleanup
     exit 1
 }
 
@@ -301,20 +305,18 @@ function prepare_keeping_existing_target() {
     # cd to the target directory, saving the current pwd to the stack
     pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
 
+    # Get just the subject line of the last commit
     # [ADO-6] Added test3
     last_commit_subject_line=$(git log -1 --pretty=%s)
-    echo "last_commit_subject_line: $last_commit_subject_line"
 
-    last_commit_changeset_regex="^\[ADO-([0-9]+)\]*"
-
-    # If the subject line matches the regex
+    # If the subject line matches the regex, with the capture group
+    last_commit_changeset_regex="^\[ADO-([0-9]+)\]"
     if [[ $last_commit_subject_line =~ $last_commit_changeset_regex ]]
     then
 
-        # Then extract the digits inside the [] square brackets
-        continue_from_changeset="${BASH_REMATCH[1]}"
-
-        echo "continue_from_changeset: $continue_from_changeset"
+        # Then get the content from the first regex matching capture group
+        continue_from_changeset=$("${BASH_REMATCH[1]}"+1)
+        print_status_update "Found latest changeset ${BASH_REMATCH[0]} already committed. Continuing from changeset $continue_from_changeset"
 
     fi
 
@@ -542,7 +544,13 @@ function map_authors() {
 
 function migrate_tfs_changesets_to_git_commits() {
 
-    first_commit=true
+    # If continue_from_changeset is set, then this isn't our first commit
+    if [[ -n $continue_from_changeset ]]
+    then
+        first_commit=false
+    else
+        first_commit=true
+    fi
 
     # Iterate through $tfs_changeset_sequence
     while read -r current_changeset_id
@@ -550,6 +558,17 @@ function migrate_tfs_changesets_to_git_commits() {
 
         # Read changeset information from the JSON history file
         current_changeset_info=$(jq -c '.history.changeset[] | select (.["@id"] == "'"${current_changeset_id}"'") | [.comment["#text"], .["@owner"], .["@date"]]' "${tfs_repo_history_file_json}")
+
+        # If continue_from_changeset is set, skip changesets before that
+        if [[ -n $continue_from_changeset && $current_changeset_id -lt $continue_from_changeset ]]
+        then
+
+            print_status_update "Skipping changeset ${current_changeset_id} because it is before continue point ${continue_from_changeset}"
+            continue
+
+        fi
+
+        # Extract fields from the changeset info
         current_changeset_message=$(echo "${current_changeset_info}" | jq -r '.[0]')
         current_changeset_author=$( echo "${current_changeset_info}" | jq -r '.[1]')
         current_changeset_date=$(   echo "${current_changeset_info}" | jq -r '.[2]')
@@ -619,9 +638,9 @@ function migrate_tfs_changesets_to_git_commits() {
         # Commit files
         if ! git commit \
             --all \
-            --allow-empty \
             --author="${author_mapping_array["${current_changeset_author}"]}" \
             --message="[ADO-${current_changeset_id}] ${current_changeset_message}"
+            # --allow-empty \ # don't want to allow empty commits if this script is running on an interval, and there are no new changesets
         then
             popd 1> /dev/null || pushd_popd_cd_error
             print_error_and_exit "Error while committing changes. See git output"
@@ -696,13 +715,13 @@ function main() {
     git_push
 
     # Cleanup
-    unset_shell_environment_variables
+    cleanup
     exit 0
 
 }
 
 # Trap if user hits CTRL-C during script
-trap "unset_shell_environment_variables; exit 1" SIGHUP SIGINT SIGQUIT SIGPIPE SIGTERM
+trap "cleanup; exit 1" SIGHUP SIGINT SIGQUIT SIGPIPE SIGTERM
 
 # Execute the main function
 main "$@"
