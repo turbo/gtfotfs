@@ -4,26 +4,31 @@
 # Rename functions and variables to be human readable
 
 
-# Configurables
-# Keep temporary directory
-declare -i GT_KEEPDIR=0
-
 # Directory and file names
 # declare -r is a read-only variable
-declare -r GT_HISTORY="/tmp/$GT_WORKSPACE-history.xml"
-declare -r GT_JQHISTORY="$GT_HISTORY.json"
-declare -r GT_VERSION="v1.0.4"
-declare -r GT_WORKSPACE="tmigrate"
+declare -r  script_name="${0}"
+declare -r  script_version="v1.0.4-dev"
+declare -r  tfs_workspace="migration-workspace"
+declare -r  history_file="./$tfs_workspace-history.xml"
+declare -r  jq_history_file="$history_file.json"
 
 # Declare global variables
-declare GT_COLLECTION
-declare GT_FIRSTCS="T"
-declare GT_GITREMOTE
-declare GT_IGNOREFILE
-declare GT_NAMEFILE
-declare -A GT_OWNERMAP # declare -A is an array
-declare GT_REPO
-declare GT_TARGETDIR
+# declare -A is an associative array
+# declare -i is an integer variable
+declare     GT_COLLECTION
+declare     GT_FIRSTCS="T"
+declare     GT_GITREMOTE
+declare     GT_IGNOREFILE
+declare -i  GT_KEEPDIR=0 # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
+declare     GT_NAMEFILE
+declare -A  GT_OWNERMAP
+declare     GT_REPO
+declare     GT_TARGETDIR
+
+# Colours for formatting stdout
+declare -r  error_red_colour='\033[0;31m'
+declare -r  info_yellow_colour='\033[0;33m'
+declare -r  reset_colour='\033[0m'
 
 # Environment variables used
 # export GIT_AUTHOR_DATE="${GT_CURCSDATE}"
@@ -39,11 +44,11 @@ declare GT_TARGETDIR
 function print_usage_instructions() {
 
     cat <<EOF
-    TFVC to Git Migration Tool (${0}) ${GT_VERSION}
+    TFVC to Git Migration Tool $script_name $version
     by turbo (minxomat@gmail.com | github.com/turbo)
     forked by Sourcegraph (github.com/sourcegraph/gtfotfs)
 
-    Usage: ${0} <args>
+    Usage: $script_name <args>
 
     Arguments:
 
@@ -106,7 +111,7 @@ function print_status_update() {
 
     # TODO: Add logging to a file
 
-    echo -e "$(date +'%F %T'); ${0}; INFO; $1\n"
+    echo -e "${info_yellow_colour}$(date +'%F %T'); $script_name $version; INFO;${reset_colour} $1\n"
 
 }
 
@@ -120,7 +125,7 @@ function print_error_and_exit() {
     then
 
         # Then print the message
-        echo -e "$(date +'%F %T'); ${0}; ERROR; $1\n"
+        echo -e "${error_red_colour}$(date +'%F %T'); $script_name $version; ERROR;${reset_colour} $1\n"
 
     fi
 
@@ -214,18 +219,18 @@ function stage_ignore_file() {
 
 function create_temp_workspace() {
     print_status_update "Deleting workspace (allowed to fail)."
-    tf workspace -delete -noprompt "${GT_WORKSPACE}" -collection:"${GT_COLLECTION}" >/dev/null
+    tf workspace -delete -noprompt "${tfs_workspace}" -collection:"${GT_COLLECTION}" >/dev/null
 
     print_status_update "Creating workspace for collection ${GT_COLLECTION}."
-    if ! tf workspace -new -noprompt "${GT_WORKSPACE}" -collection:"${GT_COLLECTION}"; then
+    if ! tf workspace -new -noprompt "${tfs_workspace}" -collection:"${GT_COLLECTION}"; then
         print_error_and_exit "Failed to create new workspace ${GT_COLLECTION}."
     fi
 
     print_status_update "Unmapping source (allowed to fail)"
-    tf workfold -unmap -workspace:"${GT_WORKSPACE}" "${GT_REPO}"
+    tf workfold -unmap -workspace:"${tfs_workspace}" "${GT_REPO}"
 
     print_status_update "Mapping source ${GT_REPO} to ${GT_TARGETDIR}."
-    if ! tf workfold -map "${GT_REPO}" -workspace:"${GT_WORKSPACE}" "${GT_TARGETDIR}"; then
+    if ! tf workfold -map "${GT_REPO}" -workspace:"${tfs_workspace}" "${GT_TARGETDIR}"; then
         print_error_and_exit "Failed to map repo to workspace. Check tf output."
     fi
 }
@@ -233,28 +238,28 @@ function create_temp_workspace() {
 function get_tfs_history() {
     print_status_update "Getting history of ${GT_REPO} in range ${GT_FIRSTCS}. This will take *A WHILE*."
 
-    rm -f "$GT_HISTORY"
+    rm -f "$history_file"
 
-    if ! tf history -workspace:"${GT_WORKSPACE}" "${GT_REPO}" -recursive -format:xml -version:"${GT_FIRSTCS}" -noprompt >"${GT_HISTORY}"; then
+    if ! tf history -workspace:"${tfs_workspace}" "${GT_REPO}" -recursive -format:xml -version:"${GT_FIRSTCS}" -noprompt >"${history_file}"; then
         print_error_and_exit "Unable to get TFVC history. See tf output."
     fi
 }
 
 function convert_history() {
-    if ! xml2json -t xml2json -o "${GT_HISTORY}.json" "${GT_HISTORY}"; then
-        print_error_and_exit "Unable to convert history to json. See file ${GT_HISTORY}."
+    if ! xml2json -t xml2json -o "${history_file}.json" "${history_file}"; then
+        print_error_and_exit "Unable to convert history to json. See file ${history_file}."
     fi
 
-    GT_NCS=$(jq '.history.changeset | length' "${GT_JQHISTORY}")
+    GT_NCS=$(jq '.history.changeset | length' "${jq_history_file}")
     print_status_update "$GT_NCS changesets in history."
 }
 
 function cs_sequence_old_to_new() {
-    GT_CSSEQ=$(jq -r '[.history.changeset[]["@id"]] | reverse[]' "${GT_JQHISTORY}")
+    GT_CSSEQ=$(jq -r '[.history.changeset[]["@id"]] | reverse[]' "${jq_history_file}")
 }
 
 function lick_authors_into_shape() {
-    GT_OAUTHORS=$(jq -r '[.history.changeset[]["@owner"]] | unique[]' "${GT_JQHISTORY}")
+    GT_OAUTHORS=$(jq -r '[.history.changeset[]["@owner"]] | unique[]' "${jq_history_file}")
 
     if [ ! -f "$GT_NAMEFILE" ]; then
         print_error_and_exit "Owner mapping file ${GT_NAMEFILE} does not exist."
@@ -282,7 +287,7 @@ function migrate() {
     GT_FIRSTCOMMIT=1
 
     while read -r GT_CURCSID; do
-        GT_CURCSINFO=$(jq -c '.history.changeset[] | select (.["@id"] == "'"${GT_CURCSID}"'") | [.comment["#text"], .["@owner"], .["@date"]]' "${GT_JQHISTORY}")
+        GT_CURCSINFO=$(jq -c '.history.changeset[] | select (.["@id"] == "'"${GT_CURCSID}"'") | [.comment["#text"], .["@owner"], .["@date"]]' "${jq_history_file}")
         GT_CURCSDATE=$(echo "${GT_CURCSINFO}" | jq -r '.[2]')
         GT_CURCSAUTHOR=$(echo "${GT_CURCSINFO}" | jq -r '.[1]')
         GT_CURCSMESSAGE=$(echo "${GT_CURCSINFO}" | jq -r '.[0]')
