@@ -5,6 +5,8 @@
 # Refactor update_existing_target_repo
     # Check the message from the latest commit in the git repo in the destination directory
     # Try to continue from that version number from TFS
+# Sort out credential storage
+
 
 # Declare global variables
 # declare -r is a read-only variable
@@ -14,7 +16,7 @@ declare -A  author_mapping_array
 declare     author_name_mapping_file
 declare     external_dependencies="git java jq tf xml2json"
 declare     git_ignore_file
-declare     git_personal_access_token
+# declare     git_personal_access_token
 declare     git_remote
 declare     git_target_directory
 declare -r  script_name="${0}"
@@ -135,9 +137,6 @@ function print_usage_instructions() {
         Full path to a gitignore file, which will be applied during
         the migration
 
-    -p | --git-pat | --git-personal-access-token)
-        Personal Access Token for the Git remote to the converted repo to
-
     -r, --remote, --git-remote
         [Required for new clones]
         Path to new remote origin. Will be set up and force pushed
@@ -196,11 +195,11 @@ function parse_and_validate_user_args() {
             shift
             shift
             ;;
-        -p | --git-pat | --git-personal-access-token)
-            git_personal_access_token="$2"
-            shift
-            shift
-            ;;
+        # -p | --git-pat | --git-personal-access-token)
+        #     git_personal_access_token="$2"
+        #     shift
+        #     shift
+        #     ;;
         -r | --remote | --git-remote)
             git_remote="$2"
             shift
@@ -305,14 +304,14 @@ function configure_git() {
     git config --global user.name "TFS to Git Migrator"
     git config --global user.email "tfs@example.com"
 
-    # If the user provided a personal access token, then store it in a Git credential helper
-    if [ -z "$git_personal_access_token" ]
-    then
+    # # If the user provided a personal access token, then store it in a Git credential helper
+    # if [ -z "$git_personal_access_token" ]
+    # then
 
-        # shellcheck disable=SC2086 # Disable double quote warning
-        git config --global credential.helper "!f() { echo username=author; echo "password=$git_personal_access_token"; };f"
+    #     # shellcheck disable=SC2086 # Disable double quote warning
+    #     git config --global credential.helper "!f() { echo username=author; echo "password=$git_personal_access_token"; };f"
 
-    fi
+    # fi
 
 }
 
