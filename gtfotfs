@@ -146,10 +146,8 @@ EOF
 
 function parse_and_validate_user_args() {
 
-    local number_of_args=${#BASH_ARGV[@]}
-
     # If the user didn't provide any args, print usage instructions then exit
-    if [[ $number_of_args -eq 0 ]]
+    if [[ $# -eq 0 ]]
     then
         print_usage_instructions
         exit 0
@@ -614,7 +612,7 @@ function git_push() {
 
 function main() {
 
-    parse_and_validate_user_args $#
+    parse_and_validate_user_args "$@"
 
     # Check that all needed dependencies are installed and in $PATH
     check_dependencies git java jq tf xml2json
