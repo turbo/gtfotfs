@@ -21,9 +21,9 @@ declare -r  script_name="${0}"
 declare -r  script_version="v1.0.4-dev"
 declare     tfs_collection
 declare     tfs_history_start_changeset="T"
-declare -r  tfs_repo_history_file_json="$tfs_workspace-history.json"
-declare -r  tfs_repo_history_file_xml="./$tfs_workspace-history.xml"
 declare -r  tfs_workspace="gtfotfs-migration-workspace"
+declare -r  tfs_repo_history_file_json="$tfs_workspace-history.json"
+declare -r  tfs_repo_history_file_xml="$tfs_workspace-history.xml"
 declare     tfs_source_repo_path
 declare     update_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
 
@@ -475,7 +475,7 @@ function map_authors() {
     fi
 
     # Get a list of unique authors' email addresses from the TFS repo history file
-    # jq -r '[.history.changeset[]["@owner"]] | unique[]' gtfotfs-migration-workspace-history.xml.json
+    # jq -r '[.history.changeset[]["@owner"]] | unique[]' gtfotfs-migration-workspace-history.json
     authors_email_addresses_to_map_from_tfs_history=$(jq -r '[.history.changeset[]["@owner"]] | unique[]' "${tfs_repo_history_file_json}")
 
     # Iterate through the list of authors from the TFS repo history file
@@ -484,7 +484,7 @@ function map_authors() {
 
         # Use jq to search the $author_name_mapping_file for the author's email address from the TFS repo history file
         author=$(jq -r '.["'"${author_to_map_from_tfs_history//\\/\\\\}"'"]' "$author_name_mapping_file")
-        # jq -r '.["'"${author_to_map_from_tfs_history//\\/\\\\}"'"]' names.json
+        # jq -r '.["'"${author_to_map_from_tfs_history//\\/\\\\}"'"]' authors.json
 
         # If jq didn't find this author from the TFS history in the $author_name_mapping_file, then exit
         if [ -z "${author}" ]
