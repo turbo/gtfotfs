@@ -516,7 +516,7 @@ function migrate_tfs_changesets_to_git_commits() {
         ((count_of_changesets--))
 
         # Print commit details to the user to show progress
-        print_status_update "Getting changeset C${current_changeset_id} [${count_of_changesets} remaining]:"
+        print_status_update "Downloading changeset ${current_changeset_id} from TFS [${count_of_changesets} remaining]:"
         echo "Author:  ${current_changeset_author} -> ${author_mapping_array["${current_changeset_author}"]}"
         echo "Date:    ${current_changeset_date}"
         echo "Message: ${current_changeset_message}"
@@ -565,7 +565,7 @@ function migrate_tfs_changesets_to_git_commits() {
         fi
 
         # Print the new working directory to show where this command is getting run from
-        print_status_update "Running git commit from $(pwd)"
+        print_status_update "Committing changeset ${current_changeset_id} to git repo"
 
         # Commit files
         if ! git commit \
