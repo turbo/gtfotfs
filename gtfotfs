@@ -2,30 +2,30 @@
 
 # TODO:
 # If Git remote is provided, test its connection during input validation (ie. git can access credentials, start a session, network connectivity, etc.)
-# Refactor update_existing_target_repo, to test if the destination directory exists / is empty / has a repo with a matching remote
-# update_existing_target_repo check what the latest version is in the git repo, and try to continue from that version number from TFS
-
-# Directory and file names
-# declare -r is a read-only variable
-declare -r  script_version="v1.0.4-dev"
-declare -r  script_name="${0}"
-declare -r  tfs_workspace="gtfotfs-migration-workspace"
-declare -r  tfs_repo_history_file_xml="./$tfs_workspace-history.xml"
-declare -r  tfs_repo_history_file_json="$tfs_repo_history_file_xml.json"
+# Refactor update_existing_target_repo
+    # Check the message from the latest commit in the git repo in the destination directory
+    # Try to continue from that version number from TFS
 
 # Declare global variables
+# declare -r is a read-only variable
 # declare -A is an associative array
 # declare -i is an integer variable
 declare -A  author_mapping_array
 declare     author_name_mapping_file
+declare     external_dependencies="git java jq tf xml2json"
 declare     git_ignore_file
+declare     git_personal_access_token
 declare     git_remote
 declare     git_target_directory
-declare     update_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
+declare -r  script_name="${0}"
+declare -r  script_version="v1.0.4-dev"
 declare     tfs_collection
 declare     tfs_history_start_changeset="T"
+declare -r  tfs_repo_history_file_json="$tfs_workspace-history.json"
+declare -r  tfs_repo_history_file_xml="./$tfs_workspace-history.xml"
+declare -r  tfs_workspace="gtfotfs-migration-workspace"
 declare     tfs_source_repo_path
-declare     external_dependencies="git java jq tf xml2json"
+declare     update_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
 
 # Colours for formatting stdout
 declare -r  error_red_colour='\033[0;31m'
@@ -107,11 +107,12 @@ function print_usage_instructions() {
     by turbo (minxomat@gmail.com | github.com/turbo)
     forked by Sourcegraph (github.com/sourcegraph/gtfotfs)
 
-    Usage: $script_name <args>
+    Usage: $script_name -a AUTHORS.json -c COLLECTION -s SOURCE_PATH -t TARGET_PATH
 
     Arguments:
 
     -a, --authors
+        [Required]
         JSON file which maps old TFS account names
         to proper git author strings. E.g.:
         {
@@ -121,34 +122,42 @@ function print_usage_instructions() {
         }
 
     -c, --tfs-collection
+        [Required]
         Collection which contains target repo, e.g.:
         https://tfs.example.com/tfs/ProjectCollection
 
     -h, --history-start-changeset
         The numerical value of the change-set where
         migration should begin. Prior history will be
-        dropped. E.g.: 1337. Default is 1 (all commits).
+        dropped. E.g.: 1337. Default is 1 (all commits)
 
     -i, --git-ignore-file
         Full path to a gitignore file, which will be applied during
-        the migration.
+        the migration
+
+    -p | --git-pat | --git-personal-access-token)
+        Personal Access Token for the Git remote to the converted repo to
 
     -r, --remote, --git-remote
+        [Required for new clones]
         Path to new remote origin. Will be set up and force pushed
-        to during the migration.
+        to during the migration
 
     -s, --tfs-source-path
+        [Required]
         Source location within TFS, e.g.
         $/contoso/sources/productive
 
     -t, --git-target-directory
+        [Required]
         Directory where the new git repository will live.
         If this directory exists, and -u is not used, the directory
-        will be deleted and re-created.
+        will be deleted and re-created
 
     -u, --update-existing-repo
         Do not delete and re-init target, instead over-
-        write prior contents. Default is false.
+        write prior contents
+        Default is false
 
 EOF
 }
@@ -187,6 +196,11 @@ function parse_and_validate_user_args() {
             shift
             shift
             ;;
+        -p | --git-pat | --git-personal-access-token)
+            git_personal_access_token="$2"
+            shift
+            shift
+            ;;
         -r | --remote | --git-remote)
             git_remote="$2"
             shift
@@ -213,7 +227,7 @@ function parse_and_validate_user_args() {
         esac done
 
     # Validate required arguments
-    if [ -z "$author_name_mapping_file" ];  then print_error_and_exit "Author name mapping file (-n) is required"   ; fi
+    if [ -z "$author_name_mapping_file" ];  then print_error_and_exit "Author name mapping file (-a) is required"   ; fi
     if [ -z "$git_target_directory" ];      then print_error_and_exit "Git target directory (-t) is required"       ; fi
     if [ -z "$tfs_collection" ];            then print_error_and_exit "Collection (-c) is required"                 ; fi
     if [ -z "$tfs_source_repo_path" ];      then print_error_and_exit "TFS source repository path (-s) is required" ; fi
@@ -290,6 +304,15 @@ function configure_git() {
     git config --global init.defaultBranch "main"
     git config --global user.name "TFS to Git Migrator"
     git config --global user.email "tfs@example.com"
+
+    # If the user provided a personal access token, then store it in a Git credential helper
+    if [ -z "$git_personal_access_token" ]
+    then
+
+        # shellcheck disable=SC2086 # Disable double quote warning
+        git config --global credential.helper "!f() { echo username=author; echo "password=$git_personal_access_token"; };f"
+
+    fi
 
 }
 

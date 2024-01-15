@@ -1,4 +1,4 @@
 .repos/
-*history*.json
-*.xml
-*.txt
+*history.json
+*history.xml
+
