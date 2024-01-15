@@ -163,6 +163,16 @@ function unset_shell_environment_variables() {
 }
 
 
+function configure_git() {
+
+    # Configure Git, to avoid issues and noise
+    git config --global init.defaultBranch "main"
+    git config --global user.name "TFS to Git Migrator"
+    git config --global user.email "tfs@example.com"
+
+}
+
+
 function prepare_keeping_existing_target() {
 
     # Validate the target directory exists
@@ -232,7 +242,7 @@ function create_new_target_repo() {
     pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
 
     # Initialize the new git repository
-    if ! git init 2> /dev/null
+    if ! git init
     then
         popd 1> /dev/null || pushd_popd_cd_error
         print_error_and_exit "Could not initialize the git repository in ${git_target_directory}"
@@ -591,6 +601,8 @@ function main() {
     if [ -z "$author_name_mapping_file" ];           then print_error_and_exit "Owner map (-n) is required"                  ; fi
     if [ -z "$git_target_directory" ];  then print_error_and_exit "Git target directory (-t) is required"       ; fi
     if [ -z "$tfs_source_repo_path" ];  then print_error_and_exit "TFS source repository path (-s) is required" ; fi
+
+    configure_git
 
     # If the user set -k flag to keep the existing destination repo
     if $keep_existing_target_repo
