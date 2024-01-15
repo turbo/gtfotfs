@@ -146,8 +146,10 @@ EOF
 
 function parse_and_validate_user_args() {
 
+    local number_of_args=${#BASH_ARGV[@]}
+
     # If the user didn't provide any args, print usage instructions then exit
-    if [[ $# -eq 0 ]]
+    if [[ $number_of_args -eq 0 ]]
     then
         print_usage_instructions
         exit 0
