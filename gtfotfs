@@ -530,13 +530,8 @@ function migrate_tfs_changesets_to_git_commits() {
         if $first_commit
         then
 
-            # Print the new working directory to show where this command is getting run from
-            print_status_update "Running tf get $git_target_directory -recursive -noprompt -version:""C$current_changeset_id"" -force from $(pwd)"
-
             # On first commit, force the tf get command
-            tf get . -recursive -noprompt -version:"C${current_changeset_id}" -force
-
-            if [[ $? -ne 0 ]]
+            if ! tf get . -recursive -noprompt -version:"C${current_changeset_id}" -force
             then
                 popd 1> /dev/null || pushd_popd_cd_error
                 print_error_and_exit "Error while getting first commit. See tf output"
@@ -548,13 +543,9 @@ function migrate_tfs_changesets_to_git_commits() {
             # It seems like this script cannot be run from a cousin directory, must be run from a parent directory of the git_target_directory
 
         else
-            # Print the new working directory to show where this command is getting run from
-            print_status_update "Running tf get $git_target_directory -recursive -noprompt -version:""C$current_changeset_id"" from $(pwd)"
 
             # On subsequent commits, don't force the tf get command
-            tf get . -recursive -noprompt -version:"C${current_changeset_id}"
-
-            if [[ $? -ne 0 ]]
+            if ! tf get . -recursive -noprompt -version:"C${current_changeset_id}"
             then
                 popd 1> /dev/null || pushd_popd_cd_error
                 print_error_and_exit "Error while getting current commit. See tf output"
