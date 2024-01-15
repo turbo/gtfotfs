@@ -534,7 +534,7 @@ function migrate_tfs_changesets_to_git_commits() {
             print_status_update "Running tf get $git_target_directory -recursive -noprompt -version:""C$current_changeset_id"" -force from $(pwd)"
 
             # On first commit, force the tf get command
-            tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}" -force
+            tf get . -recursive -noprompt -version:"C${current_changeset_id}" -force
 
             if [[ $? -ne 0 ]]
             then
@@ -552,7 +552,7 @@ function migrate_tfs_changesets_to_git_commits() {
             print_status_update "Running tf get $git_target_directory -recursive -noprompt -version:""C$current_changeset_id"" from $(pwd)"
 
             # On subsequent commits, don't force the tf get command
-            tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}"
+            tf get . -recursive -noprompt -version:"C${current_changeset_id}"
 
             if [[ $? -ne 0 ]]
             then
