@@ -86,7 +86,8 @@ function print_usage_instructions() {
     -n, --names          JSON file which maps between old TFS account names
                         to proper git author strings. E.g.:
                         {
-                            "CONTOSO\\\\j.doe": "John Doe <john.doe@contoso.com>",
+                            "Your Azure DevOps Owner Identifier": "Your GitHub Author Identifier",
+                            "john.doe@contoso.com": "John Doe <john.doe@contoso.com>",
                             ...
                         }
 
@@ -122,7 +123,7 @@ function print_status_update() {
 
     # TODO: Add logging to a file
 
-    echo -e "${info_yellow_colour}$(date +'%F %T'); $script_name $script_version; INFO;${reset_colour} $1\n"
+    echo -e "${info_yellow_colour}$(date +'%F %T'); $script_name $script_version; INFO;${reset_colour} $1"
 
 }
 
@@ -136,7 +137,7 @@ function print_error_and_exit() {
     then
 
         # Then print the message
-        echo -e "${error_red_colour}$(date +'%F %T'); $script_name $script_version; ERROR;${reset_colour} $1\n"
+        echo -e "${error_red_colour}$(date +'%F %T'); $script_name $script_version; ERROR;${reset_colour} $1"
 
     fi
 
@@ -406,10 +407,15 @@ function map_authors() {
 
 }
 
+
 function migrate() {
 
     first_commit=true
 
+    # cd to the target directory to run commands from there
+    pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
+
+    # Iterate through $tfs_changeset_sequence
     while read -r current_changeset_id
     do
 
@@ -432,12 +438,10 @@ function migrate() {
         echo "Message: ${current_changeset_message}"
         echo ""
 
-        # cd to the target directory to run commands from there
-        pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
-
         # Print the new working directory to show where this command is getting run from
-        print_status_update "Running tf get from $(pwd)"
+        # print_status_update "Running tf get from $(pwd)"
 
+        # Sync the files in the changeset from TFS
         if $first_commit
         then
 
@@ -464,26 +468,41 @@ function migrate() {
 
         fi
 
-            tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}" -force
-
+        # Using environment variables for the dates, because Git doesn't allow setting GIT_COMMITTER_DATE by CLI arg
         export GIT_AUTHOR_DATE="${current_changeset_date}"
-        export GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
+        export GIT_COMMITTER_DATE="${current_changeset_date}"
 
-        if ! git add .; then
+        # Stage files to commit
+        if ! git add .
+        then
             popd 1> /dev/null || pushd_popd_cd_error
             print_error_and_exit "Error while staging files. See git output"
         fi
 
-        if ! git commit --allow-empty -am "[TFS-${current_changeset_id}] ${current_changeset_message}" --author="${author_mapping_array["${current_changeset_author}"]}"; then
+        echo "Author: ${author_mapping_array["${current_changeset_author}"]}"
+
+        # Commit files
+        if ! git commit \
+            --all \
+            --allow-empty \
+            --author="${author_mapping_array["${current_changeset_author}"]}" \
+            --message="[ADO-${current_changeset_id}] ${current_changeset_message}"
+        then
             popd 1> /dev/null || pushd_popd_cd_error
             print_error_and_exit "Error while committing changes. See git output"
         fi
 
+        # Decrement the number of changesets remaining
         ((count_of_changesets--))
-        popd 1> /dev/null || pushd_popd_cd_error
+
         echo ""
+
     done <<<"${tfs_changeset_sequence}"
+
+    popd 1> /dev/null || pushd_popd_cd_error
+
 }
+
 
 function git_reflog_gc_and_push_to_origin() {
 
