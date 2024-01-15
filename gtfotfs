@@ -3,6 +3,7 @@
 # TODO:
 # If Git remote is provided, test its connection during input validation (ie. git can access credentials, start a session, network connectivity, etc.)
 # Refactor update_existing_target_repo, to test if the destination directory exists / is empty / has a repo with a matching remote
+# update_existing_target_repo check what the latest version is in the git repo, and try to continue from that version number from TFS
 
 # Directory and file names
 # declare -r is a read-only variable
@@ -515,7 +516,7 @@ function migrate_tfs_changesets_to_git_commits() {
         ((count_of_changesets--))
 
         # Print commit details to the user to show progress
-        print_status_update "Getting changeset C${current_changeset_id} [${count_of_changesets} left]:"
+        print_status_update "Getting changeset C${current_changeset_id} [${count_of_changesets} remaining]:"
         echo "Author:  ${current_changeset_author} -> ${author_mapping_array["${current_changeset_author}"]}"
         echo "Date:    ${current_changeset_date}"
         echo "Message: ${current_changeset_message}"
@@ -533,7 +534,9 @@ function migrate_tfs_changesets_to_git_commits() {
             print_status_update "Running tf get $git_target_directory -recursive -noprompt -version:""C$current_changeset_id"" -force from $(pwd)"
 
             # On first commit, force the tf get command
-            if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}" -force
+            tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}" -force
+
+            if [[ $? -ne 0 ]]
             then
                 popd 1> /dev/null || pushd_popd_cd_error
                 print_error_and_exit "Error while getting first commit. See tf output"
@@ -549,7 +552,9 @@ function migrate_tfs_changesets_to_git_commits() {
             print_status_update "Running tf get $git_target_directory -recursive -noprompt -version:""C$current_changeset_id"" from $(pwd)"
 
             # On subsequent commits, don't force the tf get command
-            if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}"
+            tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}"
+
+            if [[ $? -ne 0 ]]
             then
                 popd 1> /dev/null || pushd_popd_cd_error
                 print_error_and_exit "Error while getting current commit. See tf output"
