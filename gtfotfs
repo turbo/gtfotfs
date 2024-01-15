@@ -21,7 +21,7 @@ declare     git_ignore_file
 declare     git_remote
 declare     git_target_directory
 declare -r  script_name="${0}"
-declare -r  script_version="v1.0.4-dev"
+declare -r  script_version="v1.0.4.1-dev"
 declare     tfs_collection
 declare     tfs_history_start_changeset="T"
 declare -r  tfs_workspace="gtfotfs-migration-workspace"
@@ -298,6 +298,9 @@ function prepare_keeping_existing_target() {
     # Check the output of git log to read the most recent commit message, to extract a changeset ID number to continue from
     print_status_update "Checking git log for previous changeset ID to continue from"
 
+    # cd to the target directory, saving the current pwd to the stack
+    pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
+
     # [ADO-6] Added test3
     last_commit_subject_line=$(git log -1 --pretty=%s)
     echo "last_commit_subject_line: $last_commit_subject_line"
@@ -314,6 +317,9 @@ function prepare_keeping_existing_target() {
         echo "continue_from_changeset: $continue_from_changeset"
 
     fi
+
+    # pop the target directory from the stack, and cd to the previous pwd
+    popd 1> /dev/null || pushd_popd_cd_error
 
 }
 
