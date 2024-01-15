@@ -448,6 +448,7 @@ function migrate() {
 
             # An argument error occurred:
             # The workspace could not be determined from any argument paths or the current working directory.
+            # It seems like this script cannot be run from a cousin directory, must be run from a parent directory of the git_target_directory
 
         else
 
