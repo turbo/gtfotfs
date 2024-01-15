@@ -110,7 +110,7 @@ function print_usage_instructions() {
 
     Arguments:
 
-    -a, --author-names
+    -a, --authors
         JSON file which maps old TFS account names
         to proper git author strings. E.g.:
         {
@@ -132,7 +132,7 @@ function print_usage_instructions() {
         Full path to a gitignore file, which will be applied during
         the migration.
 
-    -r, --git-remote
+    -r, --remote, --git-remote
         Path to new remote origin. Will be set up and force pushed
         to during the migration.
 
@@ -166,7 +166,7 @@ function parse_and_validate_user_args() {
     while [[ "$#" -gt 0 ]]
     do
         case $1 in
-        -a | --author-names)
+        -a | --authors)
             author_name_mapping_file="$2"
             shift
             shift
@@ -186,7 +186,7 @@ function parse_and_validate_user_args() {
             shift
             shift
             ;;
-        -r | --git-remote)
+        -r | --remote | --git-remote)
             git_remote="$2"
             shift
             shift
@@ -348,7 +348,7 @@ function create_and_stage_git_ignore_file() {
     # This function is only called when setting up a new git repo, so we're not worried about entering duplicate lines
     # Create the .gitignore file if it doesn't exist (it shouldn't)
     # Add .tf to the .gitignore file
-    echo '.tf' >> ".gitignore"
+    echo '.tf*' >> ".gitignore"
 
     # If the user provided a file path to a .gitignore file in the script args, cat its contents into the new repo's .gitignore file
     if [ -n "${git_ignore_file}" ]
@@ -511,8 +511,11 @@ function migrate_tfs_changesets_to_git_commits() {
             print_error_and_exit "Source author ${current_changeset_author} is not mapped"
         fi
 
+        # Decrement the number of changesets remaining
+        ((count_of_changesets--))
+
         # Print commit details to the user to show progress
-        print_status_update "Getting changeset C${current_changeset_id} (${count_of_changesets} left):"
+        print_status_update "Getting changeset C${current_changeset_id} [${count_of_changesets} left]:"
         echo "Author:  ${current_changeset_author} -> ${author_mapping_array["${current_changeset_author}"]}"
         echo "Date:    ${current_changeset_date}"
         echo "Message: ${current_changeset_message}"
@@ -522,12 +525,12 @@ function migrate_tfs_changesets_to_git_commits() {
         # Have to cd in and out of the directory, so that jq can read $tfs_repo_history_file_json each iteration, without having $tfs_repo_history_file_json in the repo
         pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
 
-        # Print the new working directory to show where this command is getting run from
-        # print_status_update "Running tf get from $(pwd)"
-
         # Sync the files in the changeset from TFS
         if $first_commit
         then
+
+            # Print the new working directory to show where this command is getting run from
+            print_status_update "Running tf get $git_target_directory -recursive -noprompt -version:""C$current_changeset_id"" -force from $(pwd)"
 
             # On first commit, force the tf get command
             if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}" -force
@@ -542,6 +545,8 @@ function migrate_tfs_changesets_to_git_commits() {
             # It seems like this script cannot be run from a cousin directory, must be run from a parent directory of the git_target_directory
 
         else
+            # Print the new working directory to show where this command is getting run from
+            print_status_update "Running tf get $git_target_directory -recursive -noprompt -version:""C$current_changeset_id"" from $(pwd)"
 
             # On subsequent commits, don't force the tf get command
             if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}"
@@ -575,9 +580,6 @@ function migrate_tfs_changesets_to_git_commits() {
             popd 1> /dev/null || pushd_popd_cd_error
             print_error_and_exit "Error while committing changes. See git output"
         fi
-
-        # Decrement the number of changesets remaining
-        ((count_of_changesets--))
 
         echo ""
 
