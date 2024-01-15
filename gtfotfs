@@ -309,12 +309,7 @@ function create_migration_tfs_workspace() {
     fi
 
     # Unmap the default source from workspace creation, if any
-    # Shouldn't be any
-    # TODO: Output mapping to see if there are any
-
-    print_status_update "Checking if there are any folder mappings in the workspace"
-    tf workfold -workspace:"${tfs_workspace}"
-
+    # Shouldn't be any in a new workspace
     print_status_update "Unmapping the TFS source from the workspace working folders (allowed to fail)"
     tf workfold -unmap -workspace:"${tfs_workspace}" "${tfs_source_repo_path}"
 
@@ -325,6 +320,7 @@ function create_migration_tfs_workspace() {
         print_error_and_exit "Failed to map TFS source repo to workspace. Check tf output"
     fi
 
+    # Now there should be a folder mapping, otherwise there's trouble
     print_status_update "Outputting the folder mapping to visually verify them"
     tf workfold -workspace:"${tfs_workspace}"
 
