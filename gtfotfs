@@ -316,7 +316,7 @@ function prepare_keeping_existing_target() {
 
         # Then get the content from the first regex matching capture group
         last_commit_changeset=$(("${BASH_REMATCH[1]}"))
-        continue_from_changeset=$($last_commit_changeset+1)
+        continue_from_changeset=$((last_commit_changeset+1))
 
         print_status_update "Found latest changeset $last_commit_changeset already committed. Continuing from changeset $continue_from_changeset"
 
