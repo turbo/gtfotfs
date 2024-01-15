@@ -1,4 +1,4 @@
-.repos
-.json
-.xml
-.txt
+.repos/
+*.json
+*.xml
+*.txt
