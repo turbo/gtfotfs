@@ -568,7 +568,8 @@ function migrate_tfs_changesets_to_git_commits() {
             print_error_and_exit "Error while staging files. See git output"
         fi
 
-        echo "Author: ${author_mapping_array["${current_changeset_author}"]}"
+        # Print the new working directory to show where this command is getting run from
+        print_status_update "Running git commit from $(pwd)"
 
         # Commit files
         if ! git commit \
