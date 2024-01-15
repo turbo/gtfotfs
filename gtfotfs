@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 
 # TODO:
-# Rename functions and variables to be human readable
+# If Git remote is provided, test its connection during input validation (ie. git can access credentials, start a session, network connectivity, etc.)
 # Refactor keep_existing_target_repo, to test if the destination directory exists / is empty / has a repo with a matching remote
-# Refactor user input validation into one validate_user_input function
 
 # Directory and file names
 # declare -r is a read-only variable
-declare -r  script_name="${0}"
 declare -r  script_version="v1.0.4-dev"
+declare -r  script_name="${0}"
 declare -r  tfs_workspace="gtfotfs-migration-workspace"
 declare -r  tfs_repo_history_file_xml="./$tfs_workspace-history.xml"
 declare -r  tfs_repo_history_file_json="$tfs_repo_history_file_xml.json"
@@ -16,27 +15,22 @@ declare -r  tfs_repo_history_file_json="$tfs_repo_history_file_xml.json"
 # Declare global variables
 # declare -A is an associative array
 # declare -i is an integer variable
-declare     tfs_collection
-
-declare     tfs_history_start_changeset="T"
-# Why is this variable initialized with a default value of T?
-# Why would C123~T be a valid value?
-# The version to retrieve may be specified through the 'version' option or as a version specification suffix to the item specification (example: '$/file.txt;C34').
-
-declare     git_remote
-declare     git_ignore_file
-declare     keep_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
-declare     author_name_mapping_file
 declare -A  author_mapping_array
-declare     tfs_source_repo_path
+declare     author_name_mapping_file
+declare     git_ignore_file
+declare     git_remote
 declare     git_target_directory
+declare     keep_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
+declare     tfs_collection
+declare     tfs_history_start_changeset="T"
+declare     tfs_source_repo_path
 
 # Colours for formatting stdout
 declare -r  error_red_colour='\033[0;31m'
 declare -r  info_yellow_colour='\033[0;33m'
 declare -r  reset_colour='\033[0m'
 
-# Environment variables used
+# Environment variables used because Git doesn't allow setting committer date by command line args
 # export GIT_AUTHOR_DATE="${current_changeset_date}"
 # export GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
 
@@ -59,6 +53,7 @@ declare -r  reset_colour='\033[0m'
 # popd
     # With no arguments, removes the top directory from the stack, and changes to the new top directory.
     # Exit Status: Returns success unless an invalid argument is supplied or the directory change fails.
+
 
 function unset_shell_environment_variables() {
 
@@ -162,49 +157,49 @@ function parse_and_validate_user_args() {
     while [[ "$#" -gt 0 ]]
     do
         case $1 in
-            -c | --collection)
-                tfs_collection="$2"
-                shift
-                shift
-                ;;
-            -s | --source)
-                tfs_source_repo_path="$2"
-                shift
-                shift
-                ;;
-            -h | --history)
-                tfs_history_start_changeset="C$2~T"
-                shift
-                shift
-                ;;
-            -t | --target)
-                git_target_directory="$2"
-                shift
-                shift
-                ;;
-            -k | --keep)
-                keep_existing_target_repo=true
-                shift
-                shift
-                ;;
-            -n | --names)
-                author_name_mapping_file="$2"
-                shift
-                shift
-                ;;
-            -r | --remote)
-                git_remote="$2"
-                shift
-                shift
-                ;;
-            -i | --ignore)
-                git_ignore_file="$2"
-                shift
-                shift
-                ;;
-            *)
-                print_error_and_exit "Unknown parameter: $1"
-                ;;
+        -c | --collection)
+            tfs_collection="$2"
+            shift
+            shift
+            ;;
+        -s | --source)
+            tfs_source_repo_path="$2"
+            shift
+            shift
+            ;;
+        -h | --history)
+            tfs_history_start_changeset="C$2~T"
+            shift
+            shift
+            ;;
+        -t | --target)
+            git_target_directory="$2"
+            shift
+            shift
+            ;;
+        -k | --keep)
+            keep_existing_target_repo=true
+            shift
+            shift
+            ;;
+        -n | --names)
+            author_name_mapping_file="$2"
+            shift
+            shift
+            ;;
+        -r | --remote)
+            git_remote="$2"
+            shift
+            shift
+            ;;
+        -i | --ignore)
+            git_ignore_file="$2"
+            shift
+            shift
+            ;;
+        *)
+            print_error_and_exit "Unknown parameter: $1"
+            ;;
         esac done
 
     # Validate required arguments
