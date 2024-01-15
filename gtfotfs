@@ -25,7 +25,7 @@ declare     tfs_history_start_changeset="T"
 
 declare     git_remote
 declare     git_ignore_file
-declare -i  keep_existing_target_repo=0 # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
+declare     keep_existing_target_repo # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
 declare     author_name_mapping_file
 declare -A  author_mapping_array
 declare     tfs_source_repo_path
@@ -109,7 +109,7 @@ function check_dependencies() {
     for dependency in "${@}"; do
 
         # Use the Bash built-in hash command to test if the dependency exists, and store its location in hash's storage
-        # Close the stderr, to not get any error output from the hash command, only get an output if it exists
+        # Close the stderr file descriptor, to not get any error output from the hash command, only get an output if it exists
         # If no output (error), then print an error message that the required dependency is not installed or in $PATH
         hash "${dependency}" 2>&- || print_error_and_exit "Required program \"${dependency}\" not installed or in PATH"
 
@@ -183,7 +183,7 @@ function prepare_keeping_existing_target() {
         print_status_update "git remote provided in script args, overwriting git remote origin in existing repo"
 
         # cd to the target directory, saving the current pwd to the stack
-        pushd $git_target_directory || pushd_popd_cd_error
+        pushd $git_target_directory 1> /dev/null || pushd_popd_cd_error
 
         # remove the origin from the git repo metadata
         git remote rm origin
@@ -193,13 +193,13 @@ function prepare_keeping_existing_target() {
         then
 
             # If adding the provided remote fails
-            popd || pushd_popd_cd_error
+            popd 1> /dev/null || pushd_popd_cd_error
             print_error_and_exit "Could not add origin $git_remote. Check git output"
 
         fi
 
         # pop the target directory from the stack, and cd to the previous pwd
-        popd || pushd_popd_cd_error
+        popd 1> /dev/null || pushd_popd_cd_error
 
     fi
 
@@ -227,12 +227,12 @@ function create_new_target_repo() {
     fi
 
     # cd into the newly created target directory, pushing the pwd to the directory stack
-    pushd "${git_target_directory}" || pushd_popd_cd_error
+    pushd $git_target_directory 1> /dev/null || pushd_popd_cd_error
 
     # Initialize the new git repository
     if ! git init
     then
-        popd || pushd_popd_cd_error
+        popd 1> /dev/null || pushd_popd_cd_error
         print_error_and_exit "Could not initialize the git repository in ${git_target_directory}"
     fi
 
@@ -240,12 +240,12 @@ function create_new_target_repo() {
     print_status_update "Adding git remote origin ${git_remote}"
     if ! git remote add origin "${git_remote}"
     then
-        popd || pushd_popd_cd_error
+        popd 1> /dev/null || pushd_popd_cd_error
         print_error_and_exit "Could not add origin ${git_remote}. Check git output"
     fi
 
     # pop the target directory from the stack, and cd to the previous pwd
-    popd || pushd_popd_cd_error
+    popd 1> /dev/null || pushd_popd_cd_error
 
 }
 
@@ -255,7 +255,7 @@ function create_and_stage_git_ignore_file() {
     print_status_update "Adding initial .gitignore file to exclude .tf directory"
 
     # cd into the target directory
-    pushd "${git_target_directory}" || pushd_popd_cd_error
+    pushd $git_target_directory 1> /dev/null || pushd_popd_cd_error
 
     # This function is only called when setting up a new git repo, so we're not worried about entering duplicate lines
     # Create the .gitignore file if it doesn't exist (it shouldn't)
@@ -271,11 +271,11 @@ function create_and_stage_git_ignore_file() {
     # Stage the .gitignore file to be committed to the repo
     if ! git add .gitignore
     then
-        popd || pushd_popd_cd_error
+        popd 1> /dev/null || pushd_popd_cd_error
         print_error_and_exit "Could not stage .gitignore file. Check git output"
     fi
 
-    popd || pushd_popd_cd_error
+    popd 1> /dev/null || pushd_popd_cd_error
 
 }
 
@@ -430,7 +430,7 @@ function migrate() {
         echo ""
 
         # cd to the target directory to run commands from there
-        pushd "${git_target_directory}" || pushd_popd_cd_error
+        pushd $git_target_directory 1> /dev/null || pushd_popd_cd_error
 
         # Print the new working directory to show where this command is getting run from
         print_status_update "Running tf get from $(pwd)"
@@ -441,7 +441,7 @@ function migrate() {
             # On first commit, force the tf get command
             if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}" -force
             then
-                popd || pushd_popd_cd_error
+                popd 1> /dev/null || pushd_popd_cd_error
                 print_error_and_exit "Error while getting first commit. See tf output"
             fi
             first_commit=false
@@ -455,7 +455,7 @@ function migrate() {
             # On subsequent commits, don't force the tf get command
             if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}"
             then
-                popd || pushd_popd_cd_error
+                popd 1> /dev/null || pushd_popd_cd_error
                 print_error_and_exit "Error while getting current commit. See tf output"
             fi
 
@@ -467,24 +467,24 @@ function migrate() {
         export GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
 
         if ! git add .; then
-            popd || pushd_popd_cd_error
+            popd 1> /dev/null || pushd_popd_cd_error
             print_error_and_exit "Error while staging files. See git output"
         fi
 
         if ! git commit --allow-empty -am "[TFS-${current_changeset_id}] ${current_changeset_message}" --author="${author_mapping_array["${current_changeset_author}"]}"; then
-            popd || pushd_popd_cd_error
+            popd 1> /dev/null || pushd_popd_cd_error
             print_error_and_exit "Error while committing changes. See git output"
         fi
 
         ((count_of_changesets--))
-        popd || pushd_popd_cd_error
+        popd 1> /dev/null || pushd_popd_cd_error
         echo ""
     done <<<"${tfs_changeset_sequence}"
 }
 
 function git_reflog_gc_and_push_to_origin() {
 
-    pushd "${git_target_directory}" || pushd_popd_cd_error
+    pushd $git_target_directory 1> /dev/null || pushd_popd_cd_error
 
     print_status_update "Optimizing repository size by performing git reflog expire and git gc"
 
@@ -495,11 +495,11 @@ function git_reflog_gc_and_push_to_origin() {
 
     if ! git push -u origin --all --force
     then
-        popd || pushd_popd_cd_error
+        popd 1> /dev/null || pushd_popd_cd_error
         print_error_and_exit "Error while pushing to origin. See git output"
     fi
 
-    popd || pushd_popd_cd_error
+    popd 1> /dev/null || pushd_popd_cd_error
 
 }
 
@@ -540,7 +540,7 @@ function main() {
             shift
             ;;
         -k | --keep)
-            keep_existing_target_repo=1
+            keep_existing_target_repo=true
             shift
             shift
             ;;
@@ -573,7 +573,7 @@ function main() {
     if [ -z "$tfs_source_repo_path" ];  then print_error_and_exit "TFS source repository path (-s) is required" ; fi
 
     # If the user set -k flag to keep the existing destination repo
-    if ((keep_existing_target_repo > 0))
+    if $keep_existing_target_repo
     then
         prepare_keeping_existing_target
     else
