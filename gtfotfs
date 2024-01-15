@@ -2,7 +2,7 @@
 
 # TODO:
 # Rename functions and variables to be human readable
-# Refactor KEEPDIR, to test if the destination directory exists / is empty / has a repo with a matching remote
+# Refactor keep_existing_target_repo, to test if the destination directory exists / is empty / has a repo with a matching remote
 # Refactor user input validation into one validate_user_input function
 
 # Directory and file names
@@ -16,7 +16,7 @@ declare -r  tfs_repo_history_file_json="$tfs_repo_history_file_xml.json"
 # Declare global variables
 # declare -A is an associative array
 # declare -i is an integer variable
-declare     COLLECTION
+declare     tfs_collection
 
 declare     tfs_history_start_changeset="T"
 # Why is this variable initialized with a default value of T?
@@ -25,7 +25,7 @@ declare     tfs_history_start_changeset="T"
 
 declare     git_remote
 declare     git_ignore_file
-declare -i  KEEPDIR=0 # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
+declare -i  keep_existing_target_repo=0 # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
 declare     author_name_mapping_file
 declare -A  author_mapping_array
 declare     tfs_source_repo_path
@@ -122,7 +122,7 @@ function print_status_update() {
 
     # TODO: Add logging to a file
 
-    echo -e "${info_yellow_colour}$(date +'%F %T'); $script_name $version; INFO;${reset_colour} $1\n"
+    echo -e "${info_yellow_colour}$(date +'%F %T'); $script_name $script_version; INFO;${reset_colour} $1\n"
 
 }
 
@@ -286,14 +286,14 @@ function create_migration_tfs_workspace() {
 
     # Delete the workspace if it already exists
     print_status_update "Deleting ${tfs_workspace} workspace if it already exists (allowed to fail)"
-    tf workspace -delete -noprompt "${tfs_workspace}" -collection:"${COLLECTION}" >/dev/null
+    tf workspace -delete -noprompt "${tfs_workspace}" -collection:"${tfs_collection}" >/dev/null
 
     # Create the workspace for the migration
     # Note that this workspace will continue to exist as created, until this script is run again, which will delete and recreate it
-    print_status_update "Creating ${tfs_workspace} workspace for collection ${COLLECTION}"
-    if ! tf workspace -new -noprompt "${tfs_workspace}" -collection:"${COLLECTION}"
+    print_status_update "Creating ${tfs_workspace} workspace for collection ${tfs_collection}"
+    if ! tf workspace -new -noprompt "${tfs_workspace}" -collection:"${tfs_collection}"
     then
-        print_error_and_exit "Failed to create new ${tfs_workspace} workspace for collection ${COLLECTION}"
+        print_error_and_exit "Failed to create new ${tfs_workspace} workspace for collection ${tfs_collection}"
     fi
 
     # Unmap the default source from workspace creation, if any
@@ -366,14 +366,14 @@ function map_authors() {
         print_error_and_exit "Owner mapping file ${author_name_mapping_file} does not exist"
     fi
 
-    # Get the list of authors from the TFS repo history file
-    authors_to_map_from_tfs_history=$(jq -r '[.history.changeset[]["@owner"]] | unique[]' "${tfs_repo_history_file_json}")
+    # Get the list of authors' email addresses from the TFS repo history file
+    authors_email_addresses_to_map_from_tfs_history=$(jq -r '[.history.changeset[]["@owner"]] | unique[]' "${tfs_repo_history_file_json}")
 
     # Iterate through the list of authors from the TFS repo history file
     while IFS="" read -r author_to_map_from_tfs_history
     do
 
-        # Use jq to search the $author_name_mapping_file for the author from the TFS repo history file
+        # Use jq to search the $author_name_mapping_file for the author's email address from the TFS repo history file
         author=$(jq -r '.["'"${author_to_map_from_tfs_history//\\/\\\\}"'"]' "$author_name_mapping_file")
 
         # If jq didn't find this author from the TFS history in the $author_name_mapping_file, then exit
@@ -390,8 +390,8 @@ function map_authors() {
         # Store the author in the associative array
         author_mapping_array["${author_to_map_from_tfs_history}"]="${author}"
 
-    # Read the next line from the authors_to_map_from_tfs_history list, from the TFS history
-    done < <(tr ' ' '\n' <<<"${authors_to_map_from_tfs_history}")
+    # Read the next line from the authors_email_addresses_to_map_from_tfs_history list, from the TFS history
+    done < <(tr ' ' '\n' <<<"${authors_email_addresses_to_map_from_tfs_history}")
 
     # Output the name mapping to the user for visual verification
     print_status_update "Authors found in TFS repo history and read from $author_name_mapping_file:"
@@ -405,7 +405,7 @@ function map_authors() {
 
 function migrate() {
 
-    first_commit=1
+    first_commit=true
 
     while read -r current_changeset_id
     do
@@ -416,31 +416,51 @@ function migrate() {
         current_changeset_author=$( echo "${current_changeset_info}" | jq -r '.[1]')
         current_changeset_date=$(   echo "${current_changeset_info}" | jq -r '.[2]')
 
+        # Validate (again) that the author is mapped
         if [ -z "${author_mapping_array["${current_changeset_author}"]}" ]
         then
             print_error_and_exit "Source author ${current_changeset_author} is not mapped"
         fi
 
+        # Print commit details to the user to show progress
         print_status_update "Getting changeset C${current_changeset_id} (${count_of_changesets} left):"
         echo "Author:  ${current_changeset_author} -> ${author_mapping_array["${current_changeset_author}"]}"
         echo "Date:    ${current_changeset_date}"
         echo "Message: ${current_changeset_message}"
         echo ""
 
+        # cd to the target directory to run commands from there
         pushd "${git_target_directory}" || pushd_popd_cd_error
 
-        if ((first_commit > 0)); then
-            if ! tf get "${git_target_directory}" -force -recursive -noprompt -version:"C${current_changeset_id}"; then
+        # Print the new working directory to show where this command is getting run from
+        print_status_update "Running tf get from $(pwd)"
+
+        if $first_commit
+        then
+
+            # On first commit, force the tf get command
+            if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}" -force
+            then
                 popd || pushd_popd_cd_error
                 print_error_and_exit "Error while getting first commit. See tf output"
             fi
-            first_commit=0
+            first_commit=false
+
+            # An argument error occurred:
+            # The workspace could not be determined from any argument paths or the current working directory.
+
         else
-            if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}"; then
+
+            # On subsequent commits, don't force the tf get command
+            if ! tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}"
+            then
                 popd || pushd_popd_cd_error
                 print_error_and_exit "Error while getting current commit. See tf output"
             fi
+
         fi
+
+            tf get "${git_target_directory}" -recursive -noprompt -version:"C${current_changeset_id}" -force
 
         export GIT_AUTHOR_DATE="${current_changeset_date}"
         export GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
@@ -499,7 +519,7 @@ function main() {
     do
         case $1 in
         -c | --collection)
-            COLLECTION="$2"
+            tfs_collection="$2"
             shift
             shift
             ;;
@@ -519,7 +539,7 @@ function main() {
             shift
             ;;
         -k | --keep)
-            KEEPDIR=1
+            keep_existing_target_repo=1
             shift
             shift
             ;;
@@ -546,13 +566,13 @@ function main() {
         esac done
 
     # Validate arguments
-    if [ -z "$COLLECTION" ];         then print_error_and_exit "Collection (-c) is required"                 ; fi
+    if [ -z "$tfs_collection" ];         then print_error_and_exit "Collection (-c) is required"                 ; fi
     if [ -z "$author_name_mapping_file" ];           then print_error_and_exit "Owner map (-n) is required"                  ; fi
     if [ -z "$git_target_directory" ];  then print_error_and_exit "Git target directory (-t) is required"       ; fi
     if [ -z "$tfs_source_repo_path" ];  then print_error_and_exit "TFS source repository path (-s) is required" ; fi
 
     # If the user set -k flag to keep the existing destination repo
-    if ((KEEPDIR > 0))
+    if ((keep_existing_target_repo > 0))
     then
         prepare_keeping_existing_target
     else

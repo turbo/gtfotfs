@@ -1,6 +1,3 @@
 {
-  "CONTOSO\\j.doe": "John Doe <john.doe@contoso.com>",
-  "CONTOSO\\k.doe": "Kohn Doe <kohn.doe@contoso.com>",
-  "CONTOSO\\l.doe": "Lohn Doe <lohn.doe@contoso.com>",
-  "CONTOSO\\m.doe": "Mohn Doe <mohn.doe@contoso.com>"
+    "marc.leblanc": "Marc LeBlanc <marc.leblanc@sourcegraph.com>"
 }
