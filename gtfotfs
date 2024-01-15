@@ -15,11 +15,6 @@ declare -r GT_JQHISTORY="$GT_HISTORY.json"
 declare -r GT_VERSION="v1.0.4"
 declare -r GT_WORKSPACE="tmigrate"
 
-# Output colours
-declare -r CLEAR='\033[0m'
-declare -r RED='\033[0;31m'
-declare -r YELLOW='\033[0;33m'
-
 # Declare global variables
 declare GT_COLLECTION
 declare GT_FIRSTCS="T"
@@ -111,22 +106,27 @@ function print_status_update() {
 
     # TODO: Add logging to a file
 
-    # [/sourcegraph/gtfotfs-1.0.4/gtfotfs - 13:09] Adding origin localhost.
-    echo -e "${YELLOW}[${0} - $(date +%R)]${CLEAR} $1\n"
+    echo -e "$(date +'%F %T'); ${0}; INFO; $1\n"
 
 }
+
 
 function print_error_and_exit() {
 
     # TODO: Add logging to a file
 
+    # If a message was passed to this function call
+    if [ -n "$1" ]
+    then
 
-    if [ -n "$1" ]; then
-        echo -e "${RED}ERROR: ${1}${CLEAR}\n"
+        # Then print the message
+        echo -e "$(date +'%F %T'); ${0}; ERROR; $1\n"
+
     fi
+
+    # Exit the script, all errors are fatal
     exit 1
 }
-
 
 
 function cleanup() {
