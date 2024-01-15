@@ -2,7 +2,7 @@
 
 # TODO:
 # If Git remote is provided, test its connection during input validation (ie. git can access credentials, start a session, network connectivity, etc.)
-# Refactor keep_existing_target_repo, to test if the destination directory exists / is empty / has a repo with a matching remote
+# Refactor update_existing_target_repo, to test if the destination directory exists / is empty / has a repo with a matching remote
 
 # Directory and file names
 # declare -r is a read-only variable
@@ -20,10 +20,11 @@ declare     author_name_mapping_file
 declare     git_ignore_file
 declare     git_remote
 declare     git_target_directory
-declare     keep_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
+declare     update_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
 declare     tfs_collection
 declare     tfs_history_start_changeset="T"
 declare     tfs_source_repo_path
+declare     external_dependencies="git java jq tf xml2json"
 
 # Colours for formatting stdout
 declare -r  error_red_colour='\033[0;31m'
@@ -59,7 +60,6 @@ function unset_shell_environment_variables() {
 
     unset GIT_COMMITTER_DATE
     unset GIT_AUTHOR_DATE
-    print_status_update "Unset GIT_COMMITTER_DATE and GIT_AUTHOR_DATE environment variables"
 
 }
 
@@ -110,35 +110,44 @@ function print_usage_instructions() {
 
     Arguments:
 
-    -c, --collection     Collection which contains target repo, e.g.:
-                        https://tfs.example.com/tfs/ProjectCollection
+    -a, --author-names
+        JSON file which maps old TFS account names
+        to proper git author strings. E.g.:
+        {
+            "Your Azure DevOps Changeset Owner Identifier": "Your GitHub Author Identifier",
+            "john.doe@contoso.com": "John Doe <john.doe@contoso.com>",
+            ...
+        }
 
-    -s, --source         Source location within TFS, e.g.
-                        $/contoso/sources/productive
+    -c, --tfs-collection
+        Collection which contains target repo, e.g.:
+        https://tfs.example.com/tfs/ProjectCollection
 
-    -h, --history        The numerical value of the change-set where
-                        migration should begin. Prior history will be
-                        dropped. E.g.: 1337. Default is first ever.
+    -h, --history-start-changeset
+        The numerical value of the change-set where
+        migration should begin. Prior history will be
+        dropped. E.g.: 1337. Default is 1 (all commits).
 
-    -t, --target         Directory (will be created) where the new git
-                        repository will live.
+    -i, --git-ignore-file
+        Full path to a gitignore file, which will be applied during
+        the migration.
 
-    -k, --keep           Do not delete and re-init target, instead over-
-                        write prior contents. Default is false.
+    -r, --git-remote
+        Path to new remote origin. Will be set up and force pushed
+        to during the migration.
 
-    -n, --names          JSON file which maps between old TFS account names
-                        to proper git author strings. E.g.:
-                        {
-                            "Your Azure DevOps Owner Identifier": "Your GitHub Author Identifier",
-                            "john.doe@contoso.com": "John Doe <john.doe@contoso.com>",
-                            ...
-                        }
+    -s, --tfs-source-path
+        Source location within TFS, e.g.
+        $/contoso/sources/productive
 
-    -r, --remote         Path to new remote origin. Will be set up and pushed
-                        to during the migration.
+    -t, --git-target-directory
+        Directory where the new git repository will live.
+        If this directory exists, and -u is not used, the directory
+        will be deleted and re-created.
 
-    -i, --ignore         Full path to a gitignore file, which will be applied during
-                        the migration.
+    -u, --update-existing-repo
+        Do not delete and re-init target, instead over-
+        write prior contents. Default is false.
 
 EOF
 }
@@ -157,43 +166,43 @@ function parse_and_validate_user_args() {
     while [[ "$#" -gt 0 ]]
     do
         case $1 in
-        -c | --collection)
-            tfs_collection="$2"
-            shift
-            shift
-            ;;
-        -s | --source)
-            tfs_source_repo_path="$2"
-            shift
-            shift
-            ;;
-        -h | --history)
-            tfs_history_start_changeset="C$2~T"
-            shift
-            shift
-            ;;
-        -t | --target)
-            git_target_directory="$2"
-            shift
-            shift
-            ;;
-        -k | --keep)
-            keep_existing_target_repo=true
-            shift
-            shift
-            ;;
-        -n | --names)
+        -a | --author-names)
             author_name_mapping_file="$2"
             shift
             shift
             ;;
-        -r | --remote)
+        -c | --tfs-collection)
+            tfs_collection="$2"
+            shift
+            shift
+            ;;
+        -h | --history-start-changeset)
+            tfs_history_start_changeset="C$2~T"
+            shift
+            shift
+            ;;
+        -i | --git-ignore-file)
+            git_ignore_file="$2"
+            shift
+            shift
+            ;;
+        -r | --git-remote)
             git_remote="$2"
             shift
             shift
             ;;
-        -i | --ignore)
-            git_ignore_file="$2"
+        -s | --tfs-source-path)
+            tfs_source_repo_path="$2"
+            shift
+            shift
+            ;;
+        -t | --git-target-directory)
+            git_target_directory="$2"
+            shift
+            shift
+            ;;
+        -u | --update-existing-repo)
+            update_existing_target_repo=true
             shift
             shift
             ;;
@@ -217,7 +226,8 @@ function check_dependencies() {
     # TODO: Print the $PATH env to help visually check that the right paths are in PATH, especially for tf
 
     # For each dependecy in the function args
-    for dependency in "${@}"; do
+    for dependency in $external_dependencies
+    do
 
         # Use the Bash built-in hash command to test if the dependency exists, and store its location in hash's storage
         # Close the stderr file descriptor, to not get any error output from the hash command, only get an output if it exists
@@ -615,10 +625,10 @@ function main() {
     parse_and_validate_user_args "$@"
 
     # Check that all needed dependencies are installed and in $PATH
-    check_dependencies git java jq tf xml2json
+    check_dependencies
 
     # If the user set the -k flag to keep the existing destination repo
-    if $keep_existing_target_repo
+    if $update_existing_target_repo
     then
         prepare_keeping_existing_target
     else
