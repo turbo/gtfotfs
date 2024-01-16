@@ -500,7 +500,6 @@ function get_tfs_repo_history() {
         -recursive \
         -format:xml \
         -noprompt \
-        -sort:ascending \
         >"${tfs_repo_history_file_xml}"
     then
         print_error_and_exit "Unable to get TFVC history. See tf output"
@@ -526,11 +525,8 @@ function convert_tfs_repo_history_file_from_xml_to_json() {
 
 function load_tfs_changeset_sequence_old_to_new() {
 
-    # # TFS XML output must have stored changesets in reverse chronological order? so reversing order for git?
-    # tfs_changeset_sequence=$(jq -r '[.history.changeset[]["@id"]] | reverse[]' "${tfs_repo_history_file_json}")
-
     # TFS XML output must have stored changesets in reverse chronological order? so reversing order for git?
-    tfs_changeset_sequence=$(jq -r '[.history.changeset[]["@id"]]' "${tfs_repo_history_file_json}")
+    tfs_changeset_sequence=$(jq -r '[.history.changeset[]["@id"]] | reverse[]' "${tfs_repo_history_file_json}")
 
 }
 
