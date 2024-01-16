@@ -504,7 +504,7 @@ function get_tfs_repo_history() {
     fi
 
     # Read it from JSON
-    tfs_latest_changeset_id=$(jq -r '[.history.changeset[].["@id"]]' "${tfs_latest_changeset_json}")
+    tfs_latest_changeset_id=$(jq -r '.history.changeset."@id"' "${tfs_latest_changeset_json}")
 
     # If tfs_history_start_changeset -gt latest, then we're already caught up, exit 0
     if [[ "$tfs_history_start_changeset" -gt "$tfs_latest_changeset_id" ]]
