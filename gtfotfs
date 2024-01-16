@@ -487,7 +487,7 @@ function get_tfs_repo_history() {
     # If $tfs_history_end_changeset -gt latest, then set tfs_history_end_changeset=latest
 
     tfs_history_end_changeset=$((tfs_history_start_changeset + changelist_batch_size))
-    print_status_update "Getting history of $tfs_source_repo_path, starting at changeset $tfs_history_start_changeset, up to $tfs_history_end_changeset, this may take a long time, depending on TFS changeset sizes"
+    print_status_update "Getting history of $tfs_source_repo_path from changeset $tfs_history_start_changeset to changeset $tfs_history_end_changeset, this may take a long time, depending on TFS changeset sizes"
 
     # Delete any existing history file from previous executions
     rm -f "$tfs_repo_history_file_xml"
@@ -500,7 +500,7 @@ function get_tfs_repo_history() {
         -recursive \
         -format:xml \
         -noprompt \
-        -sort:Ascending \
+        -sort:ascending \
         >"${tfs_repo_history_file_xml}"
     then
         print_error_and_exit "Unable to get TFVC history. See tf output"
