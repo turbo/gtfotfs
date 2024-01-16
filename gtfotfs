@@ -21,6 +21,7 @@ declare     git_ignore_file
 # declare     git_personal_access_token
 declare     git_remote
 declare     git_target_directory
+declare -i  last_commit_changeset
 declare -r  script_name="${0}"
 declare -r  script_version="v1.0.4.1-dev"
 declare     tfs_collection
@@ -28,6 +29,8 @@ declare -i  tfs_history_start_changeset
 declare -r  tfs_workspace="gtfotfs-migration-workspace"
 declare -r  tfs_repo_history_file_json="$tfs_workspace-history.json"
 declare -r  tfs_repo_history_file_xml="$tfs_workspace-history.xml"
+declare -r  tfs_latest_changeset_json="$tfs_workspace-latest-changeset.json"
+declare -r  tfs_latest_changeset_xml="$tfs_workspace-latest-changeset.xml"
 declare     tfs_source_repo_path
 declare     update_existing_target_repo=false # Keep the existing target directory, in case of using this script to update an existing repo, instead of delete and create new
 
@@ -481,13 +484,47 @@ function get_tfs_repo_history() {
     fi
 
     # Check the latest changeset in the repo
+    # Get it in XML
+    if ! tf history \
+        "${tfs_source_repo_path}" \
+        -workspace:"${tfs_workspace}" \
+        -stopafter:1 \
+        -recursive \
+        -format:xml \
+        -noprompt \
+        >"${tfs_latest_changeset_xml}"
+    then
+        print_error_and_exit "Unable to get latest changeset ID. See tf output"
+    fi
+
+    # Convert it to JSON
+    if ! xml2json -t xml2json -o "${tfs_latest_changeset_json}" "${tfs_latest_changeset_xml}"
+    then
+        print_error_and_exit "Unable to convert latest changeset to JSON. See file ${tfs_latest_changeset_xml}"
+    fi
+
+    # Read it from JSON
+    tfs_latest_changeset_id=$(jq -r '[.history.changeset[].["@id"]]' "${tfs_latest_changeset_json}")
 
     # If tfs_history_start_changeset -gt latest, then we're already caught up, exit 0
+    if [[ "$tfs_history_start_changeset" -gt "$tfs_latest_changeset_id" ]]
+    then
+        print_status_update "Latest changeset from TFS is $tfs_latest_changeset_id, and latest changeset in the Git repo is $last_commit_changeset. No more history to migrate, exiting."
+        cleanup
+        Exit 0
+    fi
+
+    # Set our tfs_history_end_changeset to the start + the batch size
+    tfs_history_end_changeset=$((tfs_history_start_changeset + changelist_batch_size - 1))
 
     # If $tfs_history_end_changeset -gt latest, then set tfs_history_end_changeset=latest
+    if [[ "$tfs_history_end_changeset" -gt "$tfs_latest_changeset_id" ]]
+    then
+        print_status_update "Latest changeset from TFS is $tfs_latest_changeset_id, migrating up to latest."
+        tfs_history_end_changeset=$tfs_latest_changeset_id
+    fi
 
-    tfs_history_end_changeset=$((tfs_history_start_changeset + changelist_batch_size))
-    print_status_update "Getting history of $tfs_source_repo_path from changeset $tfs_history_start_changeset to changeset $tfs_history_end_changeset, this may take a long time, depending on TFS changeset sizes"
+    print_status_update "Getting history of $tfs_source_repo_path, from changeset $tfs_history_start_changeset to changeset $tfs_history_end_changeset; this may take a long time, depending on TFS changeset sizes"
 
     # Delete any existing history file from previous executions
     rm -f "$tfs_repo_history_file_xml"
@@ -513,7 +550,7 @@ function convert_tfs_repo_history_file_from_xml_to_json() {
     # Convert TF's XML file to JSON format to be much easier to work with
     if ! xml2json -t xml2json -o "${tfs_repo_history_file_json}" "${tfs_repo_history_file_xml}"
     then
-        print_error_and_exit "Unable to convert history to json. See file ${tfs_repo_history_file_xml}"
+        print_error_and_exit "Unable to convert history to JSON. See file ${tfs_repo_history_file_xml}"
     fi
 
     # Count and print the number of changesets in the TFS repo's history
