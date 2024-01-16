@@ -24,7 +24,7 @@ declare     git_target_directory
 declare -r  script_name="${0}"
 declare -r  script_version="v1.0.4.1-dev"
 declare     tfs_collection
-declare     tfs_history_start_changeset="T"
+declare -i  tfs_history_start_changeset
 declare -r  tfs_workspace="gtfotfs-migration-workspace"
 declare -r  tfs_repo_history_file_json="$tfs_workspace-history.json"
 declare -r  tfs_repo_history_file_xml="$tfs_workspace-history.xml"
@@ -135,6 +135,7 @@ function print_usage_instructions() {
         https://tfs.example.com/tfs/ProjectCollection
 
     -h, --history-start-changeset
+        [Optional for new repos, ignored for updating existing repos]
         The numerical value of the change-set where
         migration should begin. Prior history will be
         dropped. E.g.: 1337. Default is 1 (all commits)
@@ -197,7 +198,7 @@ function parse_and_validate_user_args() {
             shift
             ;;
         -h | --history-start-changeset)
-            tfs_history_start_changeset="C$2~T"
+            tfs_history_start_changeset="$2"
             shift
             shift
             ;;
@@ -463,13 +464,27 @@ function create_migration_tfs_workspace() {
 
 function get_tfs_repo_history() {
 
-    # If continue_from_changeset is set, then don't bother pulling history from before then
+    # Changeset ID range formatting
+    # "C2~T" # Start at 2, end at latest
+    # C is changeset, optional if specifying just a number
+    # T is tip, or latest
+    # ~ is the range
+    # "2~10" # Start at 2, end at 10
+    # https://learn.microsoft.com/en-us/azure/devops/repos/tfvc/use-team-foundation-version-control-commands?view=azure-devops#use-a-version-specification-argument-to-specify-affected-versions-of-items
+
+    # If continue_from_changeset is set
+    # Then don't bother pulling history from before then
+    # And ignore the value the user provided in --history-start-changeset
     if [[ -n $continue_from_changeset ]]
     then
         tfs_history_start_changeset=$continue_from_changeset
     fi
 
-    # Want to find a way to check the max changeset in the repo, and if $tfs_history_end_changeset is greater than max changeset in the repo, then set tfs_history_end_changeset=max change set
+    # Check the latest changeset in the repo
+
+    # If tfs_history_start_changeset -gt latest, then we're already caught up, exit 0
+
+    # If $tfs_history_end_changeset -gt latest, then set tfs_history_end_changeset=latest
 
     tfs_history_end_changeset=$((tfs_history_start_changeset + changelist_batch_size))
     print_status_update "Getting history of $tfs_source_repo_path, starting at changeset $tfs_history_start_changeset, up to $tfs_history_end_changeset, this may take a long time, depending on TFS changeset sizes"
@@ -478,7 +493,15 @@ function get_tfs_repo_history() {
     rm -f "$tfs_repo_history_file_xml"
 
     # Download the TFS history in xml format, and output to the $tfs_repo_history_file_xml
-    if ! tf history "${tfs_source_repo_path}" -workspace:"${tfs_workspace}" -version:"${tfs_history_start_changeset}" -recursive -format:xml -noprompt >"${tfs_repo_history_file_xml}"
+    if ! tf history \
+        "${tfs_source_repo_path}" \
+        -workspace:"${tfs_workspace}" \
+        -version:"${tfs_history_start_changeset}~${tfs_history_end_changeset}" \
+        -recursive \
+        -format:xml \
+        -noprompt \
+        -sort:Ascending \
+        >"${tfs_repo_history_file_xml}"
     then
         print_error_and_exit "Unable to get TFVC history. See tf output"
     fi
@@ -503,8 +526,11 @@ function convert_tfs_repo_history_file_from_xml_to_json() {
 
 function load_tfs_changeset_sequence_old_to_new() {
 
+    # # TFS XML output must have stored changesets in reverse chronological order? so reversing order for git?
+    # tfs_changeset_sequence=$(jq -r '[.history.changeset[]["@id"]] | reverse[]' "${tfs_repo_history_file_json}")
+
     # TFS XML output must have stored changesets in reverse chronological order? so reversing order for git?
-    tfs_changeset_sequence=$(jq -r '[.history.changeset[]["@id"]] | reverse[]' "${tfs_repo_history_file_json}")
+    tfs_changeset_sequence=$(jq -r '[.history.changeset[]["@id"]]' "${tfs_repo_history_file_json}")
 
 }
 
