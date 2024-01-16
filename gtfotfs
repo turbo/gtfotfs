@@ -14,6 +14,7 @@
 # declare -i is an integer variable
 declare -A  author_mapping_array
 declare     author_name_mapping_file
+declare -i  changelist_batch_size=2
 declare -i  continue_from_changeset
 declare     external_dependencies="git java jq tf xml2json"
 declare     git_ignore_file
@@ -185,6 +186,11 @@ function parse_and_validate_user_args() {
             shift
             shift
             ;;
+        -b | --changelist-batch-size)
+            changelist_batch_size="$2"
+            shift
+            shift
+            ;;
         -c | --tfs-collection)
             tfs_collection="$2"
             shift
@@ -300,8 +306,6 @@ function prepare_keeping_existing_target() {
     fi
 
     # Check the output of git log to read the most recent commit message, to extract a changeset ID number to continue from
-    print_status_update "Checking git log for previous changeset ID to continue from"
-
     # cd to the target directory, saving the current pwd to the stack
     pushd "$git_target_directory" 1> /dev/null || pushd_popd_cd_error
 
@@ -459,13 +463,22 @@ function create_migration_tfs_workspace() {
 
 function get_tfs_repo_history() {
 
-    print_status_update "Getting history of ${tfs_source_repo_path}, starting at changeset ${tfs_history_start_changeset}, this may take a long time, depending on TFS repo history size"
+    # If continue_from_changeset is set, then don't bother pulling history from before then
+    if [[ -n $continue_from_changeset ]]
+    then
+        tfs_history_start_changeset=$continue_from_changeset
+    fi
+
+    # Want to find a way to check the max changeset in the repo, and if $tfs_history_end_changeset is greater than max changeset in the repo, then set tfs_history_end_changeset=max change set
+
+    tfs_history_end_changeset=$((tfs_history_start_changeset + changelist_batch_size))
+    print_status_update "Getting history of $tfs_source_repo_path, starting at changeset $tfs_history_start_changeset, up to $tfs_history_end_changeset, this may take a long time, depending on TFS changeset sizes"
 
     # Delete any existing history file from previous executions
     rm -f "$tfs_repo_history_file_xml"
 
     # Download the TFS history in xml format, and output to the $tfs_repo_history_file_xml
-    if ! tf history -workspace:"${tfs_workspace}" "${tfs_source_repo_path}" -recursive -format:xml -version:"${tfs_history_start_changeset}" -noprompt >"${tfs_repo_history_file_xml}"
+    if ! tf history "${tfs_source_repo_path}" -workspace:"${tfs_workspace}" -version:"${tfs_history_start_changeset}" -recursive -format:xml -noprompt >"${tfs_repo_history_file_xml}"
     then
         print_error_and_exit "Unable to get TFVC history. See tf output"
     fi
@@ -561,15 +574,6 @@ function migrate_tfs_changesets_to_git_commits() {
         # Read changeset information from the JSON history file
         current_changeset_info=$(jq -c '.history.changeset[] | select (.["@id"] == "'"${current_changeset_id}"'") | [.comment["#text"], .["@owner"], .["@date"]]' "${tfs_repo_history_file_json}")
 
-        # If continue_from_changeset is set, skip changesets before that
-        if [[ -n $continue_from_changeset && $current_changeset_id -lt $continue_from_changeset ]]
-        then
-
-            print_status_update "Skipping changeset ${current_changeset_id} because it is before continue point ${continue_from_changeset}"
-            continue
-
-        fi
-
         # Extract fields from the changeset info
         current_changeset_message=$(echo "${current_changeset_info}" | jq -r '.[0]')
         current_changeset_author=$( echo "${current_changeset_info}" | jq -r '.[1]')
@@ -641,9 +645,9 @@ function migrate_tfs_changesets_to_git_commits() {
         # nothing to commit, working tree clean # Also an error that need to consider
         if ! git commit \
             --all \
+            --allow-empty \
             --author="${author_mapping_array["${current_changeset_author}"]}" \
             --message="[ADO-${current_changeset_id}] ${current_changeset_message}"
-            # --allow-empty \ # don't want to allow empty commits if this script is running on an interval, and there are no new changesets
         then
             popd 1> /dev/null || pushd_popd_cd_error
             print_error_and_exit "Error while committing changes. See git output"
